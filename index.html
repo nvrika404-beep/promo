@@ -9,6 +9,7 @@
   <link rel="icon" href="assets/logo.webp" type="image/webp">
   <link rel="stylesheet" href="assets/fonts.css">
   <link rel="stylesheet" href="celebration.css">
+  <link rel="stylesheet" href="founder.css">
   <script src="config.js" defer></script>
   <script src="app.js" defer></script>
   <script src="celebrate.js" defer></script>
@@ -22,14 +23,21 @@
         <p class="eyebrow welcome-label"><span class="live-dot"></span> ВЫ В ГОСТЯХ У RIKANV</p>
         <h1 id="hero-title"><span class="hooray">Ура<span class="exclamation">!</span></span><span class="hero-subtitle">Вам — скидка.</span></h1>
         <p class="stand-thanks">Спасибо, что зашли на наш стенд!</p>
-        <div class="ticket-wrap">
-          <div class="ticket-float"><div class="discount-ticket" id="discount-ticket"><div class="ticket-main"><span class="ticket-kicker">ВСТРЕТИЛИСЬ НЕ ЗРЯ</span><span class="giant-discount">−10<span>%</span></span><span class="ticket-bottom">ВАШ ПРОМОКОД RIKANV <span aria-hidden="true">↗</span></span></div><div class="ticket-stub"><strong>7</strong><span>ДНЕЙ<br>НА ПОКУПКУ</span></div></div></div>
-          <span class="ticket-stamp" aria-hidden="true"><span>ЭТО<br>ВАМ!</span></span>
-        </div>
+        <figure class="founder-scene">
+          <span class="founder-halo" aria-hidden="true"></span>
+          <span class="founder-spark founder-spark-one" aria-hidden="true">✳</span>
+          <span class="founder-spark founder-spark-two" aria-hidden="true">✦</span>
+          <a class="founder-offer" id="discount-ticket" href="#discount" aria-label="Получить скидку 10% — перейти к форме">
+            <span class="founder-float"><img src="assets/dmitry-discount.webp" width="1000" height="1498" fetchpriority="high" alt="Дмитрий Шаханов протягивает карточку со скидкой 10%"></span>
+          </a>
+          <span class="founder-badge" aria-hidden="true">ЭТО<br>ВАМ! <span>↙</span></span>
+          <figcaption class="founder-signature"><strong>Дмитрий Шаханов</strong><span>Основатель RikaNV</span></figcaption>
+        </figure>
         <p class="hero-description">Забирайте свои −10% и выбирайте момент.<br>Промокод действует 7 дней после получения.</p>
-        <div class="gift-note"><span class="gift-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 13h22v6H5zm3 6v10h16V19M16 13v16M16 13c-7 0-10-2-10-5a3 3 0 0 1 6-1l4 6Zm0 0c7 0 10-2 10-5a3 3 0 0 0-6-1l-4 6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span><div><strong class="gift-heading">И это ещё не всё.</strong><p>Получите подарок на стенде и возможность участвовать в розыгрыше суперприза.</p><small>Подарок — за заполненную форму.<br>Участие в розыгрыше — при покупке на стенде.</small></div></div>
+
         <a class="hero-cta" href="#discount">Да, хочу скидку! <span aria-hidden="true">↓</span></a>
       </div>
+      <div class="form-column">
       <aside class="form-card" id="discount" aria-labelledby="form-title">
         <div class="form-topline"><span class="eyebrow">ПРИЯТНОЕ НАЧИНАЕТСЯ ЗДЕСЬ</span><span class="mini-cross" aria-hidden="true">↙</span></div>
         <div id="form-intro"><h2 id="form-title">Ловите свои<br><em>−10%!</em></h2><p>Всего три поля — и промокод ваш.</p></div>
@@ -52,6 +60,8 @@
         </div>
         <noscript><p>Для отправки заявки включите JavaScript или позвоните <a href="tel:+74951289385">+7 495 128-93-85</a>.</p></noscript>
       </aside>
+      <div class="gift-note"><span class="gift-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 13h22v6H5zm3 6v10h16V19M16 13v16M16 13c-7 0-10-2-10-5a3 3 0 0 1 6-1l4 6Zm0 0c7 0 10-2 10-5a3 3 0 0 0-6-1l-4 6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span><div><strong class="gift-heading">И это ещё не всё.</strong><p>Получите подарок на стенде и возможность участвовать в розыгрыше суперприза.</p><small>Подарок — за заполненную форму.<br>Участие в розыгрыше — при покупке на стенде.</small></div></div>
+      </div>
     </section>
     <div class="conditions wrap"><span>01 <b>Оставьте контакты</b></span><span>02 <b>Сохраните промокод</b></span><span>03 <b>Покажите его на стенде</b></span></div>
   </main>

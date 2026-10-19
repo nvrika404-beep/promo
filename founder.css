@@ -9,6 +9,8 @@
 .founder-offer:focus-visible{outline-offset:4px}
 .founder-float{display:block;position:relative;top:0;width:100%;-webkit-mask-image:linear-gradient(#000 97%,transparent 100%);mask-image:linear-gradient(#000 97%,transparent 100%)}
 .founder-float img{width:100%;height:auto}
+/* Restrict the corrected artwork to the coupon; preserve the original portrait. */
+.founder-card-art{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none}
 .founder-badge{position:absolute;left:6%;top:7%;pointer-events:none;background:var(--paper);border:1px solid var(--ink);box-shadow:0 4px 0 var(--ink);border-radius:50%;width:82px;height:82px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;text-align:center;font-size:13px;font-weight:800;line-height:1.15}
 .founder-badge-label{display:block}
 .founder-badge svg{display:block;width:19px;height:19px;flex-shrink:0}

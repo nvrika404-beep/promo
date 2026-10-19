@@ -4,7 +4,6 @@
   const toggle = document.querySelector('#motion-toggle');
   const canvas = document.querySelector('#confetti');
   const context = canvas.getContext('2d');
-  const ticket = document.querySelector('#discount-ticket');
   let paused = reduced.matches, frame = 0;
   const stopConfetti = () => { cancelAnimationFrame(frame); context?.clearRect(0, 0, canvas.width, canvas.height); };
   function applyMotion() {
@@ -56,15 +55,6 @@
   reduced.addEventListener('change', () => {paused = reduced.matches; applyMotion();});
   document.addEventListener('visibilitychange', () => {if (document.hidden) stopConfetti();});
   window.addEventListener('rika:success', celebrate);
-  if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
-    ticket.addEventListener('pointermove', event => {
-      if (paused || reduced.matches) return;
-      const rect = ticket.getBoundingClientRect();
-      ticket.style.setProperty('--tilt-x', `${-(event.clientY - rect.top - rect.height / 2) / rect.height * 6}deg`);
-      ticket.style.setProperty('--tilt-y', `${(event.clientX - rect.left - rect.width / 2) / rect.width * 6}deg`);
-    });
-    ticket.addEventListener('pointerleave', () => {ticket.style.setProperty('--tilt-x', '0deg');ticket.style.setProperty('--tilt-y', '0deg');});
-  }
   applyMotion();
   celebrate();
 })();

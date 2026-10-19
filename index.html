@@ -9,10 +9,10 @@
   <link rel="icon" href="assets/logo.webp" type="image/webp">
   <link rel="stylesheet" href="assets/fonts.css">
   <link rel="stylesheet" href="celebration.css">
-  <link rel="stylesheet" href="founder.css?v=offer-v3">
+  <link rel="stylesheet" href="founder.css?v=fresh-countdown-v4">
   <script src="config.js" defer></script>
-  <script src="app.js" defer></script>
-  <script src="celebrate.js" defer></script>
+  <script src="app.js?v=countdown-v1" defer></script>
+  <script src="celebrate.js?v=fresh-v4" defer></script>
 </head>
 <body>
   <a class="skip" href="#discount">Перейти к форме</a>
@@ -28,7 +28,7 @@
           <span class="founder-spark founder-spark-one" aria-hidden="true">✳</span>
           <span class="founder-spark founder-spark-two" aria-hidden="true">✦</span>
           <a class="founder-offer" id="discount-ticket" href="#discount" aria-label="Получить скидку 10% — перейти к форме">
-            <span class="founder-float"><img src="assets/dmitry-offer-clean.webp" width="1536" height="1024" fetchpriority="high" alt="Дмитрий Шаханов с улыбкой протягивает вам карточку со скидкой 10%"></span>
+            <span class="founder-float"><img src="assets/dmitry-fresh-v4.webp" width="1254" height="1254" fetchpriority="high" alt="Дмитрий Шаханов с улыбкой протягивает вам карточку со скидкой 10%"></span>
           </a>
           <span class="founder-badge" aria-hidden="true"><span class="founder-badge-label">ЭТО<br>ВАМ!</span><svg viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M6 18h12V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <figcaption class="founder-signature"><strong>Дмитрий Шаханов</strong><span>Основатель RikaNV</span></figcaption>
@@ -56,7 +56,15 @@
         <div class="success" id="success" hidden tabindex="-1">
           <span class="success-icon" aria-hidden="true">✓</span><p class="eyebrow">ЗАЯВКА ПРИНЯТА</p><h2>Ваши −10%<br>уже здесь.</h2><p>Сохраните промокод и назовите его менеджеру вместе с телефоном из заявки. Срок действия — 7 дней с момента выдачи.</p>
           <div class="coupon"><span id="promo-code"></span><button type="button" id="copy-code" aria-label="Скопировать промокод">Скопировать <span aria-hidden="true">⧉</span></button></div>
+          <section class="promo-countdown" id="promo-countdown" aria-labelledby="countdown-title">
+            <p class="countdown-title" id="countdown-title">До конца действия скидки</p>
+            <div class="countdown-digits" role="timer" aria-live="off" aria-label="Осталось времени">
+              <span><strong id="countdown-days">00</strong><small>дней</small></span><span><strong id="countdown-hours">00</strong><small>часов</small></span><span><strong id="countdown-minutes">00</strong><small>минут</small></span><span><strong id="countdown-seconds">00</strong><small>секунд</small></span>
+            </div>
+            <p class="countdown-message" id="countdown-message" role="status">Успейте воспользоваться своими −10%.</p>
+          </section>
           <p class="coupon-deadline" id="coupon-deadline"></p><p class="copy-status" id="copy-status" role="status"></p><p class="success-stand">Покажите этот экран на стенде RikaNV.</p><p class="success-note">Покажите этот экран сотруднику и получите подарок на стенде. Для участия в розыгрыше суперприза нужна покупка на стенде.</p>
+          <button class="another-application" id="another-application" type="button">Заполнить форму для другого человека</button>
         </div>
         <noscript><p>Для отправки заявки включите JavaScript или позвоните <a href="tel:+74951289385">+7 495 128-93-85</a>.</p></noscript>
       </aside>

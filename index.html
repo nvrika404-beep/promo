@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ff6b21">
-  <meta name="description" content="Персональная скидка 10% от RikaNV на 7 дней. Оставьте контакты и получите промокод. Подарки на стенде - пока есть в наличии.">
+  <meta name="description" content="Получите скидку 10% от RikaNV и воспользуйтесь ей, когда удобно, в течение года. Оставьте контакты и получите промокод. Подарки на стенде - пока есть в наличии.">
   <title>Ура! Ваша скидка −10% — RikaNV</title>
   <link rel="icon" href="assets/logo.webp" type="image/webp">
   <link rel="stylesheet" href="assets/fonts.css">
   <link rel="stylesheet" href="celebration.css">
-  <link rel="stylesheet" href="founder.css?v=card-logo-v6">
+  <link rel="stylesheet" href="founder.css?v=year-v10">
   <script src="config.js" defer></script>
-  <script src="app.js?v=countdown-v1" defer></script>
+  <script src="app.js?v=year-v10" defer></script>
   <script src="celebrate.js?v=fresh-v4" defer></script>
 </head>
 <body>
@@ -38,7 +38,7 @@
           <span class="founder-badge" aria-hidden="true"><span class="founder-badge-label">ЭТО<br>ВАМ!</span><svg viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M6 18h12V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <figcaption class="founder-signature"><strong>Дмитрий Шаханов</strong><span>Основатель RikaNV</span></figcaption>
         </figure>
-        <div class="hero-description"><span class="discount-note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg></span><p><strong>Забирайте свои −10%</strong><span>Промокод действует <b>7 дней</b><br>после получения.</span></p></div>
+        <div class="hero-description"><span class="discount-note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h14v17l-7-4-7 4Z"/></svg></span><p><strong>Скидка будет под рукой</strong><span>Сохраните промокод.<br>Покупайте, когда удобно.</span></p></div>
 
       </div>
       <div class="form-column">
@@ -55,19 +55,12 @@
           <span class="field-error" id="consent-error"></span>
           <button class="button button-orange submit" type="submit"><span>Да, хочу −10%!</span><span aria-hidden="true">↗</span></button>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
-          <p class="form-footnote">Все поля обязательны. Один номер — один промокод на 7 дней.</p>
+          <p class="form-footnote">Все поля обязательны. Один номер — один промокод.</p>
         </form>
         <div class="success" id="success" hidden tabindex="-1">
-          <span class="success-icon" aria-hidden="true">✓</span><p class="eyebrow">ЗАЯВКА ПРИНЯТА</p><h2>Ваши −10%<br>уже здесь.</h2><p>Сохраните промокод и назовите его менеджеру вместе с телефоном из заявки. Срок действия — 7 дней с момента выдачи.</p>
+          <span class="success-icon" aria-hidden="true">✓</span><p class="eyebrow">ЗАЯВКА ПРИНЯТА</p><h2>Ваши −10%<br>уже здесь.</h2><p>Сохраните промокод и назовите его менеджеру вместе с телефоном из заявки. Используйте скидку сразу или в течение года.</p>
           <div class="coupon"><span id="promo-code"></span><button type="button" id="copy-code" aria-label="Скопировать промокод">Скопировать <span aria-hidden="true">⧉</span></button></div>
-          <section class="promo-countdown" id="promo-countdown" aria-labelledby="countdown-title">
-            <p class="countdown-title" id="countdown-title">До конца действия скидки</p>
-            <div class="countdown-digits" role="timer" aria-live="off" aria-label="Осталось времени">
-              <span><strong id="countdown-days">00</strong><small>дней</small></span><span><strong id="countdown-hours">00</strong><small>часов</small></span><span><strong id="countdown-minutes">00</strong><small>минут</small></span><span><strong id="countdown-seconds">00</strong><small>секунд</small></span>
-            </div>
-            <p class="countdown-message" id="countdown-message" role="status">Успейте воспользоваться своими −10%.</p>
-          </section>
-          <p class="coupon-deadline" id="coupon-deadline"></p><p class="copy-status" id="copy-status" role="status"></p><p class="success-stand">Покажите этот экран на стенде RikaNV.</p><p class="success-note">Покажите этот экран сотруднику и получите подарок на стенде, пока подарки есть в наличии. Для участия в розыгрыше суперприза нужна покупка на стенде.</p>
+          <p class="coupon-deadline" id="coupon-deadline"></p><p class="copy-status" id="copy-status" role="status"></p><p class="success-stand">Назовите промокод менеджеру RikaNV.</p><p class="success-note">Покажите этот экран сотруднику и получите подарок на стенде, пока подарки есть в наличии. Для участия в розыгрыше суперприза нужна покупка на стенде.</p>
           <button class="another-application" id="another-application" type="button">Заполнить форму для другого человека</button>
         </div>
         <noscript><p>Для отправки заявки включите JavaScript или позвоните <a href="tel:+74951289385">+7 495 128-93-85</a>.</p></noscript>
@@ -75,7 +68,7 @@
 
       </div>
     </section>
-    <div class="conditions wrap"><span>01 <b>Оставьте контакты</b></span><span>02 <b>Сохраните промокод</b></span><span>03 <b>Покажите его на стенде</b></span></div>
+    <div class="conditions wrap"><span>01 <b>Оставьте контакты</b></span><span>02 <b>Сохраните промокод</b></span><span>03 <b>Воспользуйтесь скидкой</b></span></div>
   </main>
   <div class="footer-area"><footer class="footer wrap"><span>© <span id="year">2026</span> АО «РИКА» · RikaNV™</span><a href="https://test.rika-nv.ru/privacy-policy/" target="_blank" rel="noopener">Политика конфиденциальности</a><a href="mailto:shop@rika.sale">shop@rika.sale</a><a href="https://t.me/clubRiKA" target="_blank" rel="noopener">Telegram ↗</a></footer></div>
 </body>

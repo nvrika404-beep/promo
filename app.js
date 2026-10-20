@@ -7,58 +7,53 @@
   const fields = ['name', 'phone', 'email', 'consent'];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let busy = false, requestId = null, submittedData = null;
-  let countdownInterval = null, couponExpiresAt = null;
+  let couponExpiresAt = null;
   const receiptKey = `rika-coupon:${config.campaign || 'rika-exhibition-10'}`;
   const success = document.querySelector('#success');
-  const countdown = document.querySelector('#promo-countdown');
   const deadline = document.querySelector('#coupon-deadline');
   const copyButton = document.querySelector('#copy-code');
   let deadlineText = '';
   const validReceipt = value => value && typeof value.promo_code === 'string' && value.promo_code.trim() && value.promo_code.length <= 120 && typeof value.expires_at === 'string' && Number.isFinite(Date.parse(value.expires_at));
-  function updateCountdown() {
+  function updateCouponStatus() {
     if (couponExpiresAt === null) return;
-    const seconds = Math.max(0, Math.ceil((couponExpiresAt - Date.now()) / 1000));
-    const expired = seconds === 0;
-    const urgent = !expired && seconds <= 86400;
-    const values = {days: Math.floor(seconds / 86400), hours: Math.floor(seconds / 3600) % 24, minutes: Math.floor(seconds / 60) % 60, seconds: seconds % 60};
-    for (const [unit, value] of Object.entries(values)) document.querySelector(`#countdown-${unit}`).textContent = String(value).padStart(2, '0');
-    countdown.classList.toggle('is-expired', expired);
-    countdown.classList.toggle('is-urgent', urgent);
-    document.querySelector('#countdown-title').textContent = expired ? 'Срок действия закончился' : urgent ? 'Последние 24 часа вашей скидки' : 'До конца действия скидки';
-    const message = expired ? 'Промокод больше не действует.' : 'Успейте воспользоваться своими −10%.';
-    const messageElement = document.querySelector('#countdown-message');
-    if (messageElement.textContent !== message) messageElement.textContent = message;
+    const expired = Date.now() >= couponExpiresAt;
     deadline.textContent = expired ? 'Срок действия этого промокода истёк.' : deadlineText;
     deadline.classList.toggle('expired', expired);
     copyButton.disabled = expired;
     if (expired) {
       success.querySelector('h2').textContent = 'Срок скидки истёк.';
-      clearInterval(countdownInterval); countdownInterval = null;
     }
   }
   function showCoupon(receipt, scroll = false) {
-    clearInterval(countdownInterval);
     couponExpiresAt = Date.parse(receipt.expires_at);
     document.querySelector('#promo-code').textContent = receipt.promo_code;
     success.querySelector('h2').innerHTML = 'Ваши −10%<br>уже здесь.';
     const formatted = new Intl.DateTimeFormat('ru-RU', {timeZone:'Europe/Moscow', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}).format(couponExpiresAt);
     deadlineText = `Действует до ${formatted} (МСК). Одно применение.`;
     form.hidden = true; document.querySelector('#form-intro').hidden = true; success.hidden = false;
-    updateCountdown();
-    if (couponExpiresAt > Date.now()) countdownInterval = setInterval(updateCountdown, 1000);
+    updateCouponStatus();
     if (scroll) {
       success.focus({preventScroll: true});
       success.scrollIntoView({behavior: reduced ? 'instant' : 'smooth', block: 'center'});
     }
   }
-  document.addEventListener('visibilitychange', () => {if (!document.hidden) updateCountdown();});
-  // Keep only the server-issued code and expiry; never store contact details.
+  document.addEventListener('visibilitychange', () => {if (!document.hidden) updateCouponStatus();});
+  window.addEventListener('focus', updateCouponStatus);
+  // Store the code, deadline, and format version only; never contact details.
   try {
     const receipt = JSON.parse(localStorage.getItem(receiptKey));
-    if (validReceipt(receipt)) showCoupon(receipt);
+    if (validReceipt(receipt)) {
+      if (receipt.version === undefined && receipt.promo_code === 'Shahanov10') {
+        // Match the one-time server migration. Never extend from the current time.
+        receipt.expires_at = new Date(Date.parse(receipt.expires_at) + 358 * 86400000).toISOString();
+        receipt.version = 2;
+        try { localStorage.setItem(receiptKey, JSON.stringify(receipt)); } catch { /* Read-only storage is supported. */ }
+      }
+      showCoupon(receipt);
+    }
   } catch { /* Registration still works when browser storage is unavailable. */ }
   document.querySelector('#another-application').addEventListener('click', () => {
-    clearInterval(countdownInterval); countdownInterval = null; couponExpiresAt = null;
+    couponExpiresAt = null;
     try { localStorage.removeItem(receiptKey); } catch { /* Storage may be disabled. */ }
     success.hidden = true; form.hidden = false; document.querySelector('#form-intro').hidden = false;
     document.querySelector('#promo-code').textContent = ''; document.querySelector('#copy-status').textContent = '';
@@ -113,7 +108,7 @@
       if (!response.ok || result.ok !== true || !validReceipt(result)) {
         throw new Error(response.status === 429 ? 'Слишком много попыток. Подождите немного и повторите отправку.' : 'Не удалось подтвердить сохранение заявки. Попробуйте ещё раз или позвоните +7 495 128-93-85.');
       }
-      const receipt = {promo_code: result.promo_code, expires_at: result.expires_at};
+      const receipt = {promo_code: result.promo_code, expires_at: result.expires_at, version: 2};
       try { localStorage.setItem(receiptKey, JSON.stringify(receipt)); } catch { /* Receipt still appears without storage. */ }
       showCoupon(receipt, true);
       form.reset();
@@ -125,7 +120,7 @@
     }
   });
   document.querySelector('#copy-code').addEventListener('click', async () => {
-    updateCountdown();
+    updateCouponStatus();
     if (copyButton.disabled) return;
     const code = document.querySelector('#promo-code').textContent;
     try {

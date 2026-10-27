@@ -144,8 +144,10 @@ class Launcher:
         ttk.Radiobutton(transport_row, text="надёжная (TCP)", variable=self.transport, value="tcp").pack(side="left", padx=6)
         ttk.Radiobutton(transport_row, text="быстрая (UDP)", variable=self.transport, value="udp").pack(side="left")
         self.find_status = tk.StringVar(value="Подключите компьютер к Wi-Fi прибора и нажмите «Найти прибор».")
-        ttk.Label(source, textvariable=self.find_status, style="Hint.TLabel", wraplength=520).grid(
-            row=2, column=1, columnspan=2, sticky="w", padx=8, pady=(2, 10))
+        ttk.Label(source, textvariable=self.find_status, style="Hint.TLabel", wraplength=420).grid(
+            row=2, column=1, sticky="w", padx=8, pady=(2, 10))
+        self.report = None
+        self.report_button = ttk.Button(source, text="Отчёт", command=self.show_report)
 
         ttk.Radiobutton(source, text="USB или карта захвата", variable=self.kind, value="device").grid(row=3, column=0, sticky="w")
         self.device = ttk.Combobox(source, state="readonly", width=44)
@@ -226,19 +228,37 @@ class Launcher:
 
     def find(self):
         self.find_button.state(["disabled"])
+        self.report_button.grid_remove()
         self.kind.set("url")
         def progress(message):
             self.root.after(0, lambda: self.find_status.set(message))
         def work():
-            url, message = discover(progress)
-            self.root.after(0, lambda: self._found(url, message))
+            url, message, report = discover(progress)
+            self.root.after(0, lambda: self._found(url, message, report))
         threading.Thread(target=work, daemon=True).start()
 
-    def _found(self, url, message):
+    def _found(self, url, message, report):
         self.find_button.state(["!disabled"])
         self.find_status.set(message)
         if url:
             self.url.set(url)
+        self.report = report
+        if report:
+            self.report_button.grid(row=2, column=2, sticky="n", pady=(2, 10))
+
+    def show_report(self):
+        window = tk.Toplevel(self.root)
+        window.title("Отчёт о приборе")
+        text = tk.Text(window, width=90, height=22, wrap="word", font=("Consolas", 10))
+        text.insert("1.0", self.report)
+        text.configure(state="disabled")
+        text.pack(fill="both", expand=True, padx=12, pady=(12, 6))
+        def copy():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.report)
+            copy_button.configure(text="Скопировано ✓")
+        copy_button = ttk.Button(window, text="Скопировать отчёт", command=copy)
+        copy_button.pack(pady=(0, 12))
 
     def collect(self):
         selected = self.device.current()

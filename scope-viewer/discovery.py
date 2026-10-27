@@ -12,8 +12,13 @@ RTSP_PATHS = (
     "/", "/live", "/live/main", "/live/ch0", "/live/av0", "/livestream", "/stream", "/stream0",
     "/stream1", "/ch0", "/ch1", "/ch01.264", "/0", "/1", "/11", "/main", "/video", "/video1",
     "/h264", "/av0_0", "/media/video1", "/onvif1", "/Streaming/Channels/101",
-    "/cam/realmonitor?channel=1&subtype=0",
+    "/cam/realmonitor?channel=1&subtype=0", "/live.sdp", "/live/0", "/live/1", "/live0", "/live1",
+    "/live/stream0", "/live/stream1", "/live/ch00_0", "/live/ch01_0", "/stream/0", "/stream/main",
+    "/stream=0", "/video0", "/videoMain", "/mainstream", "/main_stream", "/substream", "/preview",
+    "/ch0_0.h264", "/media/stream1", "/channel1", "/tcp/av0_0", "/h264/ch1/main/av_stream",
+    "/user=admin&password=&channel=1&stream=0.sdp", "/ir", "/ir.sdp", "/thermal", "/rtsp", "/test",
 )
+REPORT_PORTS = (21, 23, 80, 443, 554, 1935, 5000, 6000, 7070, 8000, 8080, 8081, 8554, 8888, 9000, 34567)
 
 
 def _run(command):
@@ -84,12 +89,12 @@ def port_open(host, port, timeout=0.6):
         return False
 
 
-def rtsp_describe(url, timeout=1.5):
-    """Возвращает (код ответа, есть ли видео в описании потока) или (None, False)."""
+def rtsp_request(url, method="DESCRIBE", timeout=1.5):
+    """Отправляет один RTSP-запрос. Возвращает (код ответа или None, полный текст ответа)."""
     match = re.match(r"rtsp://([^/:]+)(?::(\d+))?", url)
     host, port = match.group(1), int(match.group(2) or 554)
-    request = (f"DESCRIBE {url} RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n"
-               "User-Agent: RikaScopeView\r\n\r\n").encode()
+    accept = "Accept: application/sdp\r\n" if method == "DESCRIBE" else ""
+    request = f"{method} {url} RTSP/1.0\r\nCSeq: 2\r\n{accept}User-Agent: RikaScopeView\r\n\r\n".encode()
     data = b""
     try:
         with socket.create_connection((host, port), timeout=timeout) as connection:
@@ -108,16 +113,55 @@ def rtsp_describe(url, timeout=1.5):
     except OSError:
         pass  # Используем то, что успели получить.
     text = data.decode(errors="ignore")
-    status = re.match(r"RTSP/1\.0 (\d{3})", text)
-    return (int(status.group(1)) if status else None), "m=video" in text
+    status = re.match(r"RTSP/1\.\d (\d{3})", text)
+    return (int(status.group(1)) if status else None), text
+
+
+def rtsp_describe(url, timeout=1.5):
+    """Возвращает (код ответа, есть ли видео в описании потока)."""
+    status, text = rtsp_request(url, timeout=timeout)
+    return status, "m=video" in text
+
+
+def _header(text, name):
+    match = re.search(rf"(?im)^{name}:\s*(.+?)\s*$", text)
+    return match.group(1) if match else "—"
+
+
+def diagnose(host, port):
+    """Текстовый отчёт о том, как RTSP-сервер прибора отвечает на запросы. Нужен, чтобы подобрать адрес."""
+    base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        open_ports = [p for p, is_open in zip(REPORT_PORTS, pool.map(lambda p: port_open(host, p), REPORT_PORTS)) if is_open]
+    _, options = rtsp_request(base + "/", "OPTIONS")
+    lines = [
+        f"Компьютер: адреса {', '.join(local_addresses()) or '—'}, шлюзы {', '.join(gateways()) or '—'}",
+        f"Адрес: {base}",
+        f"Открытые порты: {', '.join(map(str, open_ports)) or '—'}",
+        f"Сервер: {_header(options, 'Server')}",
+        f"Методы: {_header(options, 'Public')}",
+        "Ответы на DESCRIBE:",
+    ]
+    codes = {}
+    for path in RTSP_PATHS:
+        status, text = rtsp_request(base + path)
+        codes.setdefault(status, []).append(path)
+        if status == 200:
+            lines.append(f"  200 {path}: " + " | ".join(l for l in text.splitlines() if l.startswith(("m=", "a=control", "Content-Base")))[:200])
+    for status, paths in codes.items():
+        if status != 200:
+            lines.append(f"  {status or 'нет ответа'}: {len(paths)} адресов, например {', '.join(paths[:3])}")
+    _, sample = rtsp_request(base + "/live", timeout=1.5)
+    lines.append("Пример ответа: " + (sample.strip().replace("\r\n", " | ")[:300] or "—"))
+    return "\n".join(lines)
 
 
 def discover(progress=lambda message: None):
-    """Ищет RTSP-поток. Возвращает (url или None, понятное сообщение)."""
+    """Ищет RTSP-поток. Возвращает (url или None, понятное сообщение, отчёт для поддержки или None)."""
     hosts = candidate_hosts()
     if not hosts:
-        return None, "Компьютер не подключён ни к одной сети. Подключитесь к Wi-Fi прибора."
-    protected = None
+        return None, "Компьютер не подключён ни к одной сети. Подключитесь к Wi-Fi прибора.", None
+    protected = fallback = None
     progress(f"Проверяем адреса в сети: {', '.join(hosts[:4])}…")
     targets = [(host, port) for host in hosts for port in RTSP_PORTS]
     with ThreadPoolExecutor(max_workers=16) as pool:
@@ -125,20 +169,25 @@ def discover(progress=lambda message: None):
     if not servers:
         return None, ("Видеопоток не найден. Проверьте, что Wi-Fi на приборе включён и компьютер "
                       "подключён к его сети. Если прибор отдаёт видео только в своё приложение, "
-                      "используйте видеовыход прибора и карту видеозахвата.")
+                      "используйте видеовыход прибора и карту видеозахвата."), None
     for host, port in servers:
         base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
         for path in RTSP_PATHS:
             url = base + path
             progress(f"Пробуем {url}")
-            status, has_video = rtsp_describe(url)
-            if status == 200 and has_video:
-                return url, f"Найден видеопоток: {url}"
+            status, text = rtsp_request(url)
+            if status == 200 and "m=video" in text:
+                return url, f"Найден видеопоток: {url}", None
+            if status == 200 and "m=" in text and fallback is None:
+                fallback = url
             if status == 401 and protected is None:
                 protected = url
+    if fallback:
+        return fallback, f"Найден поток: {fallback}. Если картинки не будет, нажмите «Отчёт» и пришлите его.", None
     if protected:
         return None, (f"Поток найден ({protected}), но прибор требует логин и пароль. "
-                      "Впишите адрес в виде rtsp://логин:пароль@" + protected[len("rtsp://"):])
+                      "Впишите адрес в виде rtsp://логин:пароль@" + protected[len("rtsp://"):]), None
     host, port = servers[0]
+    progress("Собираем отчёт о приборе…")
     return None, (f"На {host}:{port} есть RTSP-сервер, но путь к видео подобрать не удалось. "
-                  "Узнайте адрес потока в инструкции прибора и впишите его вручную.")
+                  "Нажмите «Отчёт», скопируйте его и пришлите разработчику."), diagnose(host, port)

@@ -70,15 +70,28 @@ def gateways():
 
 
 def candidate_hosts():
-    """Прибор обычно сам является точкой доступа, то есть шлюзом сети."""
-    hosts = gateways()
-    for address in local_addresses():
+    """Все адреса в сетях компьютера. Прибор обычно сам точка доступа, поэтому шлюз и .1 проверяем первыми."""
+    own = local_addresses()
+    preferred, rest = list(gateways()), []
+    for address in own:
         network = ipaddress.IPv4Network(f"{address}/24", strict=False)
-        for last in (1, 254, 2, 100, 123):
-            host = str(network.network_address + last)
-            if host != address:
-                hosts.append(host)
-    return list(dict.fromkeys(hosts))
+        for host in network.hosts():
+            last = int(str(host).rsplit(".", 1)[1])
+            (preferred if last in (1, 254, 123, 100, 10) else rest).append(str(host))
+    return [host for host in dict.fromkeys(preferred + rest) if host not in own]
+
+
+def scan(targets, timeout=0.5):
+    """Параллельно проверяет пары (адрес, порт). Возвращает открытые в исходном порядке."""
+    targets = list(targets)
+    with ThreadPoolExecutor(max_workers=128) as pool:
+        flags = list(pool.map(lambda target: port_open(*target, timeout=timeout), targets))
+    return [target for target, is_open in zip(targets, flags) if is_open]
+
+
+def is_proxy(host):
+    """VPN и прокси «принимают» соединения на любой порт. Настоящий прибор на портах 1 и 65001 не отвечает."""
+    return port_open(host, 1, 0.5) and port_open(host, 65001, 0.5)
 
 
 def port_open(host, port, timeout=0.6):
@@ -128,31 +141,55 @@ def _header(text, name):
     return match.group(1) if match else "—"
 
 
-def diagnose(host, port):
-    """Текстовый отчёт о том, как RTSP-сервер прибора отвечает на запросы. Нужен, чтобы подобрать адрес."""
-    base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        open_ports = [p for p, is_open in zip(REPORT_PORTS, pool.map(lambda p: port_open(host, p), REPORT_PORTS)) if is_open]
+def http_banner(host, port):
+    try:
+        with socket.create_connection((host, port), timeout=1.5) as connection:
+            connection.settimeout(1.5)
+            connection.sendall(f"GET / HTTP/1.0\r\nHost: {host}\r\n\r\n".encode())
+            data = connection.recv(2048).decode(errors="ignore")
+    except OSError:
+        return "—"
+    title = re.search(r"(?is)<title>(.*?)</title>", data)
+    first = data.splitlines()[0] if data else "нет ответа"
+    return f"{first}; Server: {_header(data, 'Server')}" + (f"; title: {title.group(1).strip()[:60]}" if title else "")
+
+
+def describe_rtsp(base):
     _, options = rtsp_request(base + "/", "OPTIONS")
-    lines = [
-        f"Компьютер: адреса {', '.join(local_addresses()) or '—'}, шлюзы {', '.join(gateways()) or '—'}",
-        f"Адрес: {base}",
-        f"Открытые порты: {', '.join(map(str, open_ports)) or '—'}",
-        f"Сервер: {_header(options, 'Server')}",
-        f"Методы: {_header(options, 'Public')}",
-        "Ответы на DESCRIBE:",
-    ]
+    lines = [f"  RTSP {base}: сервер {_header(options, 'Server')}, методы {_header(options, 'Public')}"]
     codes = {}
     for path in RTSP_PATHS:
         status, text = rtsp_request(base + path)
         codes.setdefault(status, []).append(path)
         if status == 200:
-            lines.append(f"  200 {path}: " + " | ".join(l for l in text.splitlines() if l.startswith(("m=", "a=control", "Content-Base")))[:200])
+            lines.append(f"    200 {path}: " + " | ".join(l for l in text.splitlines() if l.startswith(("m=", "a=control")))[:200])
     for status, paths in codes.items():
         if status != 200:
-            lines.append(f"  {status or 'нет ответа'}: {len(paths)} адресов, например {', '.join(paths[:3])}")
-    _, sample = rtsp_request(base + "/live", timeout=1.5)
-    lines.append("Пример ответа: " + (sample.strip().replace("\r\n", " | ")[:300] or "—"))
+            lines.append(f"    {status or 'нет ответа'}: {len(paths)} адр., например {', '.join(paths[:3])}")
+    return lines
+
+
+def diagnose(proxies):
+    """Текстовый отчёт: какие устройства есть в сетях компьютера и что они отвечают. Нужен, чтобы подобрать адрес."""
+    own = local_addresses()
+    lines = [f"Компьютер: адреса {', '.join(own) or '—'}, шлюзы {', '.join(gateways()) or '—'}"]
+    for address in own:
+        network = ipaddress.IPv4Network(f"{address}/24", strict=False)
+        hosts = [str(h) for h in network.hosts() if str(h) != address]
+        if any(host in proxies for host in hosts) or is_proxy(hosts[0]):
+            lines.append(f"Сеть {network}: похоже на VPN или прокси, пропущена")
+            continue
+        found = {}
+        for host, port in scan(((h, p) for h in hosts for p in REPORT_PORTS), timeout=0.4):
+            found.setdefault(host, []).append(port)
+        lines.append(f"Сеть {network}: устройств {len(found)}")
+        for host, ports in found.items():
+            lines.append(f"  {host}: порты {', '.join(map(str, ports))}")
+            for port in ports:
+                if port in (80, 8080, 8000):
+                    lines.append(f"    HTTP {port}: {http_banner(host, port)}")
+                if port in RTSP_PORTS:
+                    lines += describe_rtsp(f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}")
     return "\n".join(lines)
 
 
@@ -161,15 +198,11 @@ def discover(progress=lambda message: None):
     hosts = candidate_hosts()
     if not hosts:
         return None, "Компьютер не подключён ни к одной сети. Подключитесь к Wi-Fi прибора.", None
+    progress(f"Проверяем сеть: {len(hosts)} адресов…")
+    found = scan((host, port) for host in hosts for port in RTSP_PORTS)
+    proxies = {host for host in dict.fromkeys(host for host, _ in found) if is_proxy(host)}
+    servers = [(host, port) for host, port in found if host not in proxies]
     protected = fallback = None
-    progress(f"Проверяем адреса в сети: {', '.join(hosts[:4])}…")
-    targets = [(host, port) for host in hosts for port in RTSP_PORTS]
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        servers = [target for target, is_open in zip(targets, pool.map(lambda t: port_open(*t), targets)) if is_open]
-    if not servers:
-        return None, ("Видеопоток не найден. Проверьте, что Wi-Fi на приборе включён и компьютер "
-                      "подключён к его сети. Если прибор отдаёт видео только в своё приложение, "
-                      "используйте видеовыход прибора и карту видеозахвата."), None
     for host, port in servers:
         base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
         for path in RTSP_PATHS:
@@ -183,11 +216,12 @@ def discover(progress=lambda message: None):
             if status == 401 and protected is None:
                 protected = url
     if fallback:
-        return fallback, f"Найден поток: {fallback}. Если картинки не будет, нажмите «Отчёт» и пришлите его.", None
+        return fallback, f"Найден поток: {fallback}. Если картинки не будет, сообщите разработчику.", None
     if protected:
         return None, (f"Поток найден ({protected}), но прибор требует логин и пароль. "
                       "Впишите адрес в виде rtsp://логин:пароль@" + protected[len("rtsp://"):]), None
-    host, port = servers[0]
-    progress("Собираем отчёт о приборе…")
-    return None, (f"На {host}:{port} есть RTSP-сервер, но путь к видео подобрать не удалось. "
-                  "Нажмите «Отчёт», скопируйте его и пришлите разработчику."), diagnose(host, port)
+    progress("Собираем отчёт о сети прибора, до минуты…")
+    vpn = " Похоже, на компьютере включён VPN: на время проверки лучше его выключить." if proxies else ""
+    where = f"На {servers[0][0]}:{servers[0][1]} есть RTSP-сервер, но путь к видео подобрать не удалось." if servers \
+        else "Видеопоток не найден."
+    return None, (f"{where}{vpn} Нажмите «Отчёт», скопируйте его и пришлите разработчику."), diagnose(proxies)

@@ -1,0 +1,40 @@
+name: Scope viewer for Windows
+
+on:
+  push:
+    paths:
+      - "scope-viewer/**"
+      - ".github/workflows/scope-viewer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: scope-viewer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller==6.11.1
+      - name: Build RikaScopeView.exe
+        run: pyinstaller --noconfirm --onefile --windowed --name RikaScopeView --icon icon.ico --add-data "logo.png;." scope_viewer.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RikaScopeView-windows
+          path: scope-viewer/dist/RikaScopeView.exe
+          if-no-files-found: error
+      - name: Smoke test with a generated video
+        shell: pwsh
+        run: |
+          python -c "import cv2, numpy as np; w = cv2.VideoWriter('smoke.avi', cv2.VideoWriter_fourcc(*'MJPG'), 25, (640, 480)); [w.write(np.full((480, 640, 3), i * 5 % 255, np.uint8)) for i in range(50)]; w.release()"
+          $process = Start-Process dist\RikaScopeView.exe -ArgumentList "--source", "smoke.avi", "--exit-after", "6", "--windowed" -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw "RikaScopeView did not exit in time" }
+          if ($process.ExitCode -ne 0) { throw "RikaScopeView exited with code $($process.ExitCode)" }

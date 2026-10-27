@@ -45,7 +45,7 @@ class FrameSource(threading.Thread):
         if kind == "url":
             transport = self.source.get("transport", "tcp")
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = f"rtsp_transport;{transport}|fflags;nobuffer|flags;low_delay"
-            params = [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 6000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 4000]
+            params = [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 12000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 4000]
             return cv2.VideoCapture(value, cv2.CAP_FFMPEG, params)
         if kind == "file":
             os.environ.pop("OPENCV_FFMPEG_CAPTURE_OPTIONS", None)

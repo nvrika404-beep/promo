@@ -4,7 +4,9 @@ import re
 import socket
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from ftplib import FTP, error_perm
 
 RTSP_PORTS = (554, 8554)
 # Распространённые пути RTSP у тепловизоров и камер. Точный путь зависит от модели.
@@ -18,6 +20,13 @@ RTSP_PATHS = (
     "/ch0_0.h264", "/media/stream1", "/channel1", "/tcp/av0_0", "/h264/ch1/main/av_stream",
     "/user=admin&password=&channel=1&stream=0.sdp", "/ir", "/ir.sdp", "/thermal", "/rtsp", "/test",
 )
+# Медиасервер ZLMediaKit (стоит в части приборов) отдаёт потоки по адресам вида /приложение/поток.
+ZLM_STREAMS = ("stream", "test", "0", "1", "main", "sub", "ch0", "ch1", "video", "ir", "tv", "cam", "camera",
+               "thermal", "preview", "live", "av0", "stream0", "stream1", "mainstream", "substream", "h264", "rtsp")
+RTSP_PATHS = tuple(dict.fromkeys(RTSP_PATHS + tuple(f"/live/{name}" for name in ZLM_STREAMS)
+                                 + ("/rtp/0", "/app/stream", "/stream/live", "/video/0")))
+# ZLMediaKit ждёт несуществующий поток до 15 секунд и лишь потом отвечает 404, поэтому ждём дольше.
+SLOW_TIMEOUT = 18
 REPORT_PORTS = (21, 23, 80, 443, 554, 1935, 5000, 6000, 7070, 8000, 8080, 8081, 8554, 8888, 9000, 34567)
 
 
@@ -146,30 +155,73 @@ def http_banner(host, port):
         with socket.create_connection((host, port), timeout=1.5) as connection:
             connection.settimeout(1.5)
             connection.sendall(f"GET / HTTP/1.0\r\nHost: {host}\r\n\r\n".encode())
-            data = connection.recv(2048).decode(errors="ignore")
+            data = b""
+            while len(data) < 32768:
+                chunk = connection.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
     except OSError:
-        return "—"
+        pass
+    data = data.decode(errors="ignore")
+    if not data:
+        return "нет ответа"
     title = re.search(r"(?is)<title>(.*?)</title>", data)
-    first = data.splitlines()[0] if data else "нет ответа"
-    return f"{first}; Server: {_header(data, 'Server')}" + (f"; title: {title.group(1).strip()[:60]}" if title else "")
+    hints = sorted(set(re.findall(r"rtsp://[^\s\"'<>]+|[\w./-]+\.(?:cgi|cfg|ini|json|xml)\b", data)))[:15]
+    return (f"{data.splitlines()[0]}; Server: {_header(data, 'Server')}"
+            + (f"; title: {title.group(1).strip()[:60]}" if title else "")
+            + (f"; ссылки: {', '.join(hints)}" if hints else ""))
 
 
-def describe_rtsp(base):
+def probe_paths(base, stop_on_video=True, progress=lambda message: None):
+    """Запрашивает все пути одновременно. Возвращает {путь: (код, ответ, секунд до ответа)}."""
+    results = {}
+    def probe(path):
+        started = time.monotonic()
+        status, text = rtsp_request(base + path, timeout=SLOW_TIMEOUT)
+        return path, status, text, time.monotonic() - started
+    pool = ThreadPoolExecutor(max_workers=len(RTSP_PATHS))  # Все сразу: ожидание у прибора идёт параллельно.
+    try:
+        futures = [pool.submit(probe, path) for path in RTSP_PATHS]
+        for done, future in enumerate(as_completed(futures), 1):
+            path, status, text, elapsed = future.result()
+            results[path] = (status, text, elapsed)
+            progress(f"Проверено {done} из {len(futures)} вариантов (прибор отвечает медленно, до 40 секунд)…")
+            if stop_on_video and status == 200 and "m=video" in text:
+                break
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return results
+
+
+def describe_rtsp(base, results=None):
     _, options = rtsp_request(base + "/", "OPTIONS")
     lines = [f"  RTSP {base}: сервер {_header(options, 'Server')}, методы {_header(options, 'Public')}"]
     codes = {}
-    for path in RTSP_PATHS:
-        status, text = rtsp_request(base + path)
-        codes.setdefault(status, []).append(path)
+    for path, (status, text, elapsed) in (results or probe_paths(base, stop_on_video=False)).items():
+        codes.setdefault(status, []).append((path, elapsed))
         if status == 200:
             lines.append(f"    200 {path}: " + " | ".join(l for l in text.splitlines() if l.startswith(("m=", "a=control")))[:200])
-    for status, paths in codes.items():
+    for status, items in codes.items():
         if status != 200:
-            lines.append(f"    {status or 'нет ответа'}: {len(paths)} адр., например {', '.join(paths[:3])}")
+            slowest = max(elapsed for _, elapsed in items)
+            lines.append(f"    {status or 'нет ответа'}: {len(items)} адр. (до {slowest:.0f} с), например "
+                         + ", ".join(path for path, _ in items[:4]))
     return lines
 
 
-def diagnose(proxies):
+def ftp_listing(host):
+    """Список файлов на FTP прибора без пароля: там бывают настройки с именами потоков."""
+    try:
+        with FTP(host, timeout=4) as ftp:
+            ftp.login()
+            names = ftp.nlst()
+    except (OSError, EOFError, error_perm) as error:
+        return f"не открылся ({str(error)[:60] or type(error).__name__})"
+    return ", ".join(names[:40]) or "пусто"
+
+
+def diagnose(proxies, rtsp_results=None):
     """Текстовый отчёт: какие устройства есть в сетях компьютера и что они отвечают. Нужен, чтобы подобрать адрес."""
     own = local_addresses()
     lines = [f"Компьютер: адреса {', '.join(own) or '—'}, шлюзы {', '.join(gateways()) or '—'}"]
@@ -188,8 +240,11 @@ def diagnose(proxies):
             for port in ports:
                 if port in (80, 8080, 8000):
                     lines.append(f"    HTTP {port}: {http_banner(host, port)}")
+                if port == 21:
+                    lines.append(f"    FTP: {ftp_listing(host)}")
                 if port in RTSP_PORTS:
-                    lines += describe_rtsp(f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}")
+                    base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
+                    lines += describe_rtsp(base, (rtsp_results or {}).get(base))
     return "\n".join(lines)
 
 
@@ -203,12 +258,14 @@ def discover(progress=lambda message: None):
     proxies = {host for host in dict.fromkeys(host for host, _ in found) if is_proxy(host)}
     servers = [(host, port) for host, port in found if host not in proxies]
     protected = fallback = None
+    rtsp_results = {}
     for host, port in servers:
         base = f"rtsp://{host}" if port == 554 else f"rtsp://{host}:{port}"
-        for path in RTSP_PATHS:
+        progress(f"Найден видеосервер {base}, подбираем адрес потока…")
+        rtsp_results[base] = probe_paths(base, progress=progress)
+        for path in RTSP_PATHS:  # В порядке списка: сначала самые типичные адреса.
+            status, text, _ = rtsp_results[base].get(path, (None, "", 0))
             url = base + path
-            progress(f"Пробуем {url}")
-            status, text = rtsp_request(url)
             if status == 200 and "m=video" in text:
                 return url, f"Найден видеопоток: {url}", None
             if status == 200 and "m=" in text and fallback is None:
@@ -224,4 +281,4 @@ def discover(progress=lambda message: None):
     vpn = " Похоже, на компьютере включён VPN: на время проверки лучше его выключить." if proxies else ""
     where = f"На {servers[0][0]}:{servers[0][1]} есть RTSP-сервер, но путь к видео подобрать не удалось." if servers \
         else "Видеопоток не найден."
-    return None, (f"{where}{vpn} Нажмите «Отчёт», скопируйте его и пришлите разработчику."), diagnose(proxies)
+    return None, (f"{where}{vpn} Нажмите «Отчёт», скопируйте его и пришлите разработчику."), diagnose(proxies, rtsp_results)

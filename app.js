@@ -27,9 +27,9 @@
   function showCoupon(receipt, scroll = false) {
     couponExpiresAt = Date.parse(receipt.expires_at);
     document.querySelector('#promo-code').textContent = receipt.promo_code;
-    success.querySelector('h2').innerHTML = 'Ваши −10%<br>уже здесь.';
+    success.querySelector('h2').innerHTML = 'Ваш промокод<br>на −10%';
     const formatted = new Intl.DateTimeFormat('ru-RU', {timeZone:'Europe/Moscow', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}).format(couponExpiresAt);
-    deadlineText = `Действует до ${formatted} (МСК). Одно применение.`;
+    deadlineText = `Действителен до ${formatted} (МСК). Одно применение.`;
     form.hidden = true; document.querySelector('#form-intro').hidden = true; success.hidden = false;
     updateCouponStatus();
     if (scroll) {
@@ -116,7 +116,7 @@
     } catch (error) {
       status.textContent = error.name === 'AbortError' ? 'Ответ задерживается. Попробуйте ещё раз: используем тот же номер заявки, без дубликата.' : error instanceof TypeError ? 'Нет соединения с сервером. Проверьте интернет и повторите отправку.' : error.message;
     } finally {
-      clearTimeout(timer); busy = false; button.disabled = false; button.firstElementChild.textContent = 'Да, хочу −10%!';
+      clearTimeout(timer); busy = false; button.disabled = false; button.firstElementChild.textContent = 'Получить промокод';
     }
   });
   document.querySelector('#copy-code').addEventListener('click', async () => {

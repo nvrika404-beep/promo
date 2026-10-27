@@ -11,6 +11,7 @@ from ftplib import FTP, error_perm
 RTSP_PORTS = (554, 8554)
 # Распространённые пути RTSP у тепловизоров и камер. Точный путь зависит от модели.
 RTSP_PATHS = (
+    "/1/h264major", "/1/h264minor", "/0/h264major", "/0/h264minor",  # приборы RikaNV («Кабан»)
     "/", "/live", "/live/main", "/live/ch0", "/live/av0", "/livestream", "/stream", "/stream0",
     "/stream1", "/ch0", "/ch1", "/ch01.264", "/0", "/1", "/11", "/main", "/video", "/video1",
     "/h264", "/av0_0", "/media/video1", "/onvif1", "/Streaming/Channels/101",

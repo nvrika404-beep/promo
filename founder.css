@@ -67,3 +67,9 @@ body.motion-paused .founder-offer{transform:none!important}
 @media(max-width:760px){.hero{padding-top:23px}.hooray{font-size:36px}.hero-subtitle{font-size:29px;gap:12px}.hero-subtitle strong{font-size:103px}.hero-perk{padding:18px 16px}.hero-perk>strong{font-size:19px;padding-right:27px}.hero-perk svg{width:25px;height:25px;top:18px;right:13px}.hero-perk p{font-size:12px}.hero-cta{font-size:14px;margin-top:16px;min-height:54px}.stand-thanks{font-size:12px}.hero-perks{gap:11px;margin-top:18px}}
 @media(max-width:480px){.hooray{font-size:32px}.hero-subtitle{font-size:24px;gap:10px}.hero-subtitle strong{font-size:90px}.hero-perks{gap:10px;margin-top:17px}.hero-perk{padding:16px 12px}.hero-perk>strong{font-size:17px;padding-right:0}.hero-perk svg{width:21px;height:21px;right:10px;top:16px}.hero-perk p{font-size:11px;margin-top:10px;line-height:1.5}.hero-cta{font-size:13px;min-height:52px;margin-top:15px}.stand-thanks{font-size:11px;margin-top:10px}}
 @media(max-width:359px){.hooray{font-size:28px}.hero-subtitle{font-size:21px;gap:8px}.hero-subtitle strong{font-size:78px}.hero-perks{gap:8px}.hero-perk{padding:14px 10px}.hero-perk>strong{font-size:15px}.hero-perk svg{width:17px;height:17px;top:14px;right:8px}.hero-perk p{font-size:10px;line-height:1.55}.hero-cta{font-size:12px;min-height:50px}.stand-thanks{font-size:10px}}
+/* Прицельная сетка вместо символов ✳ и ✦: на iPhone они превращались в цветные эмодзи. */
+.reticle{display:block;width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:3.2;overflow:visible}
+.reticle-dot{fill:currentColor;stroke:none}
+.founder-spark-one .reticle{stroke-width:9}
+.founder-spark-two .reticle{stroke-width:6}
+body{font-variant-emoji:text}

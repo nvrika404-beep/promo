@@ -73,3 +73,6 @@ body.motion-paused .founder-offer{transform:none!important}
 .founder-spark-one .reticle{stroke-width:9}
 .founder-spark-two .reticle{stroke-width:6}
 body{font-variant-emoji:text}
+/* Заголовок в две строки: «Получите скидку», ниже крупно −10%. */
+.hooray-accent{color:var(--paper)}
+.hooray{word-spacing:.1em}

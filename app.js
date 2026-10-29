@@ -43,13 +43,13 @@
   try {
     const receipt = JSON.parse(localStorage.getItem(receiptKey));
     if (validReceipt(receipt)) {
-      if (receipt.version === undefined && receipt.promo_code === 'Shahanov10') {
-        // Match the one-time server migration. Never extend from the current time.
-        receipt.expires_at = new Date(Date.parse(receipt.expires_at) + 358 * 86400000).toISOString();
-        receipt.version = 2;
-        try { localStorage.setItem(receiptKey, JSON.stringify(receipt)); } catch { /* Read-only storage is supported. */ }
+      if (receipt.version === 3) showCoupon(receipt);
+      else {
+        // Old open tabs can save a new server deadline in the old format.
+        // Reconfirm it with the server instead of guessing the issue date.
+        try { localStorage.removeItem(receiptKey); } catch { /* Read-only storage is supported. */ }
+        status.textContent = 'Срок промокода — 30 дней с первой выдачи. Чтобы восстановить код и точную дату, отправьте форму с прежними контактами. Второй лид не создастся.';
       }
-      showCoupon(receipt);
     }
   } catch { /* Registration still works when browser storage is unavailable. */ }
   document.querySelector('#another-application').addEventListener('click', () => {
@@ -85,6 +85,34 @@
     const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign'].map(k => [k, (params.get(k) || '').slice(0, 100)]));
     return {name, phone, email, consent: true, consent_version: 'promo-2026-10-19', campaign: config.campaign || 'rika-exhibition-10', website: form.elements.website.value, utm};
   }
+  class RetryableSubmissionError extends Error {}
+  async function requestCoupon(data) {
+    // One request ID across retries: a lost response must not create another lead.
+    const body = JSON.stringify({...data, request_id: requestId});
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        status.textContent = 'Связь прервалась. Проверяем сохранение заявки и получаем промокод…';
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(config.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json'}, body, signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer'});
+        if (response.status >= 500 || response.status === 408) throw new RetryableSubmissionError('Сервер временно не отвечает. Повторите отправку — второй лид не создастся.');
+        if (response.status === 429) throw new Error('Слишком много попыток. Подождите немного и повторите отправку.');
+        const result = await response.json();
+        if (response.status === 409 && result.error === 'phone_already_registered') throw new Error('На этот номер уже оформлена скидка. Для восстановления укажите прежние имя и email. Использованную или истёкшую скидку повторно получить нельзя.');
+        if (!response.ok) throw new Error('Не удалось подтвердить сохранение заявки. Проверьте данные и повторите отправку или позвоните +7 495 128-93-85.');
+        if (result.ok !== true || !validReceipt(result)) throw new RetryableSubmissionError('Не удалось получить подтверждение. Повторите отправку — второй лид не создастся.');
+        return result;
+      } catch (error) {
+        const retryable = error.name === 'AbortError' || error instanceof TypeError || error instanceof SyntaxError || error instanceof RetryableSubmissionError;
+        if (!retryable || attempt === 2) throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (busy) return;
@@ -98,25 +126,17 @@
     const serialized = JSON.stringify(data);
     if (serialized !== submittedData) { requestId = uuid(); submittedData = serialized; }
     busy = true; button.disabled = true; button.firstElementChild.textContent = 'Сохраняем заявку…';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(config.endpoint, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...data, request_id: requestId}), signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer'});
-      let result;
-      try { result = await response.json(); } catch { throw new Error('Не удалось получить подтверждение. Попробуйте ещё раз — повторная заявка не создастся.'); }
-      if (response.status === 409 && result.error === 'phone_already_registered') throw new Error('На этот номер уже выдан промокод. Повторная выдача недоступна, в том числе после окончания срока. Если потеряли код, свяжитесь с нами: +7 495 128-93-85.');
-      if (!response.ok || result.ok !== true || !validReceipt(result)) {
-        throw new Error(response.status === 429 ? 'Слишком много попыток. Подождите немного и повторите отправку.' : 'Не удалось подтвердить сохранение заявки. Попробуйте ещё раз или позвоните +7 495 128-93-85.');
-      }
-      const receipt = {promo_code: result.promo_code, expires_at: result.expires_at, version: 2};
+      const result = await requestCoupon(data);
+      const receipt = {promo_code: result.promo_code, expires_at: result.expires_at, version: 3};
       try { localStorage.setItem(receiptKey, JSON.stringify(receipt)); } catch { /* Receipt still appears without storage. */ }
       showCoupon(receipt, true);
       form.reset();
       if (couponExpiresAt > Date.now()) window.dispatchEvent(new Event("rika:success"));
     } catch (error) {
-      status.textContent = error.name === 'AbortError' ? 'Ответ задерживается. Попробуйте ещё раз: используем тот же номер заявки, без дубликата.' : error instanceof TypeError ? 'Нет соединения с сервером. Проверьте интернет и повторите отправку.' : error.message;
+      status.textContent = error.name === 'AbortError' ? 'Ответ задерживается. Попробуйте ещё раз: используем тот же номер заявки, без дубликата.' : error instanceof TypeError ? 'Нет соединения с сервером. Проверьте интернет и повторите отправку.' : error instanceof SyntaxError ? 'Ответ сервера пришёл не полностью. Повторите отправку — второй лид не создастся.' : error.message;
     } finally {
-      clearTimeout(timer); busy = false; button.disabled = false; button.firstElementChild.textContent = 'Получить промокод';
+      busy = false; button.disabled = false; button.firstElementChild.textContent = 'Получить промокод';
     }
   });
   document.querySelector('#copy-code').addEventListener('click', async () => {

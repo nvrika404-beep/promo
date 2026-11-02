@@ -52,6 +52,7 @@ body.motion-paused .founder-offer{transform:none!important}
 .hero-subtitle{display:flex;align-items:baseline;gap:14px;font-size:30px;line-height:1;letter-spacing:-.05em;margin-top:0}
 .hero-subtitle strong{font-size:110px;line-height:1.02;letter-spacing:-.08em;font-weight:800}
 .stand-thanks{margin-top:10px;font-size:13px}
+.stand-number{white-space:nowrap}
 .hero-perks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:22px}
 .hero-perk{position:relative;min-width:0;padding:20px 20px 17px;background:var(--ink);color:var(--paper);border-radius:15px;box-shadow:0 4px 0 #bc4e17}
 .hero-perk svg{position:absolute;right:17px;top:19px;width:28px;height:28px;stroke:#ff9c57;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}

@@ -35,7 +35,9 @@ namespace BatteryTray
         public string Name;
         public int Percent;
         public bool Connected;
+        public bool Charging;
         public bool NodePresent;
+        public string Source = "Bluetooth";
     }
 
     // -----------------------------------------------------------------------
@@ -235,6 +237,8 @@ namespace BatteryTray
         public int IntervalSec = 30;
         public int LowThreshold = 20;
         public HashSet<string> Hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Приёмники Razer, для которых протокол подобран диагностикой: PID → протокол
+        public Dictionary<ushort, RazerProto> RazerLearned = new Dictionary<ushort, RazerProto>();
 
         static string Dir
         {
@@ -260,6 +264,17 @@ namespace BatteryTray
                     else if (k == "LowThreshold" && int.TryParse(v, out n) && n >= 0 && n <= 100) s.LowThreshold = n;
                     else if (k == "Hidden")
                         foreach (var id in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) s.Hidden.Add(id.Trim());
+                    else if (k == "RazerLearned")
+                        foreach (var pair in v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var kv = pair.Split(':');
+                            ushort pid;
+                            RazerProto proto;
+                            if (kv.Length == 2 &&
+                                ushort.TryParse(kv[0].Trim(), System.Globalization.NumberStyles.HexNumber, null, out pid) &&
+                                Enum.TryParse(kv[1].Trim(), out proto) && proto != RazerProto.None)
+                                s.RazerLearned[pid] = proto;
+                        }
                 }
             }
             catch { }
@@ -275,7 +290,8 @@ namespace BatteryTray
                 {
                     "IntervalSec=" + IntervalSec,
                     "LowThreshold=" + LowThreshold,
-                    "Hidden=" + string.Join(",", Hidden)
+                    "Hidden=" + string.Join(",", Hidden),
+                    "RazerLearned=" + string.Join(",", RazerLearned.Select(kv => kv.Key.ToString("X4") + ":" + kv.Value))
                 });
             }
             catch { }
@@ -444,12 +460,15 @@ namespace BatteryTray
             busy = true;
             busySince = DateTime.UtcNow;
             int gen = ++generation;
+            var learned = new Dictionary<ushort, RazerProto>(settings.RazerLearned);
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                List<Device> result;
-                try { result = Bluetooth.Query(); }
-                catch { result = new List<Device>(); }
+                var result = new List<Device>();
+                try { result.AddRange(Bluetooth.Query()); }
+                catch { }
+                try { result.AddRange(Razer.Query(learned)); }
+                catch { }
                 try { invoker.BeginInvoke((MethodInvoker)delegate { OnResult(gen, result); }); }
                 catch { }
             });
@@ -472,7 +491,7 @@ namespace BatteryTray
             // предупреждение о низком заряде — один раз при переходе через порог
             foreach (var d in devices)
             {
-                bool low = th > 0 && d.Connected && d.Percent <= th;
+                bool low = th > 0 && d.Connected && !d.Charging && d.Percent <= th;
                 bool notified;
                 lowNotified.TryGetValue(d.Id, out notified);
                 if (low && !notified && !firstRun)
@@ -490,7 +509,8 @@ namespace BatteryTray
                 if (i < visible.Count)
                 {
                     var d = visible[i];
-                    SetSlot(slots[i], d.Percent.ToString(), LevelColor(d.Percent, light), d.Name + ": " + d.Percent + "%");
+                    SetSlot(slots[i], d.Percent.ToString(), LevelColor(d, light),
+                        d.Name + ": " + d.Percent + "%" + (d.Charging ? " ⚡" : ""));
                 }
                 else if (i == 0)
                 {
@@ -512,8 +532,11 @@ namespace BatteryTray
             if (slots[i].HIcon != IntPtr.Zero) slots[i].Icon.Visible = true;
         }
 
-        Color LevelColor(int pct, bool light)
+        Color LevelColor(Device d, bool light)
         {
+            int pct = d.Percent;
+            if (d.Charging)
+                return light ? Color.FromArgb(16, 124, 16) : Color.FromArgb(108, 203, 95);
             if (settings.LowThreshold > 0 && pct <= settings.LowThreshold)
                 return light ? Color.FromArgb(196, 43, 28) : Color.FromArgb(255, 99, 88);
             return light ? Color.FromArgb(25, 25, 25) : Color.White;
@@ -588,7 +611,7 @@ namespace BatteryTray
             {
                 foreach (var d in devices.OrderBy(x => x.Connected ? 0 : 1).ThenBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase))
                 {
-                    string state = d.Connected ? d.Percent + "%" : "не подключено";
+                    string state = d.Connected ? d.Percent + "%" + (d.Charging ? ", заряжается" : "") : "не подключено";
                     var it = Item(d.Name + " — " + state, OnToggleDevice, !settings.Hidden.Contains(d.Id), d.Id);
                     it.ToolTipText = "Галочка — показывать иконку этого устройства в трее";
                     if (!d.Connected) it.ForeColor = SystemColors.GrayText;
@@ -612,6 +635,7 @@ namespace BatteryTray
             menu.Items.Add(low);
 
             menu.Items.Add(Item("Запускать вместе с Windows", OnAutostart, Autostart.IsEnabled(), null));
+            menu.Items.Add(Item(diagRunning ? "Диагностика Razer… (идёт проверка)" : "Диагностика Razer…", OnDiagnose, false, null));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(Item("Выход", delegate { Quit(); }, false, null));
         }
@@ -643,6 +667,48 @@ namespace BatteryTray
             UpdateTray();
         }
 
+        bool diagRunning;
+
+        // Перебирает все известные протоколы на всех приёмниках Razer и показывает журнал обмена.
+        void OnDiagnose(object sender, EventArgs e)
+        {
+            if (diagRunning) return;
+            diagRunning = true;
+            var snapshot = devices.ToList();
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                var log = new StringBuilder();
+                Dictionary<ushort, RazerProto> learned;
+                log.AppendLine("BatteryTray " + Application.ProductVersion + ", " + Environment.OSVersion);
+                log.AppendLine();
+                log.AppendLine("Устройства из последнего опроса:");
+                if (snapshot.Count == 0) log.AppendLine("  (нет)");
+                foreach (var d in snapshot)
+                    log.AppendLine(string.Format("  {0} [{1}] — {2}", d.Name, d.Source,
+                        d.Connected ? d.Percent + "%" + (d.Charging ? ", заряжается" : "") : "не подключено"));
+                log.AppendLine();
+                try { learned = Razer.Diagnose(log); }
+                catch (Exception ex) { log.AppendLine("Ошибка: " + ex); learned = new Dictionary<ushort, RazerProto>(); }
+
+                try
+                {
+                    invoker.BeginInvoke((MethodInvoker)delegate
+                    {
+                        diagRunning = false;
+                        if (learned.Count > 0)
+                        {
+                            foreach (var kv in learned) settings.RazerLearned[kv.Key] = kv.Value;
+                            settings.Save();
+                            log.AppendLine("Подобранный протокол сохранён, теперь заряд будет показываться автоматически.");
+                            StartRefresh();
+                        }
+                        DiagForm.Show(log.ToString());
+                    });
+                }
+                catch { }
+            });
+        }
+
         void OnAutostart(object sender, EventArgs e)
         {
             try { Autostart.Set(!Autostart.IsEnabled()); }
@@ -666,6 +732,54 @@ namespace BatteryTray
                 if (s.HIcon != IntPtr.Zero) Native.DestroyIcon(s.HIcon);
             }
             ExitThread();
+        }
+    }
+
+    // Окно с журналом диагностики и кнопкой «Скопировать»
+    static class DiagForm
+    {
+        public static void Show(string text)
+        {
+            var form = new Form
+            {
+                Text = "BatteryTray — диагностика Razer",
+                StartPosition = FormStartPosition.CenterScreen,
+                Width = 820,
+                Height = 560,
+                ShowInTaskbar = true,
+                TopMost = true
+            };
+            var box = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Both,
+                WordWrap = false,
+                Dock = DockStyle.Fill,
+                Font = new Font(FontFamily.GenericMonospace, 9f),
+                Text = text.Replace("\r\n", "\n").Replace("\n", "\r\n")
+            };
+            var bottom = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                FlowDirection = FlowDirection.RightToLeft,
+                Height = 44,
+                Padding = new Padding(8)
+            };
+            var close = new Button { Text = "Закрыть", AutoSize = true };
+            close.Click += delegate { form.Close(); };
+            var copy = new Button { Text = "Скопировать", AutoSize = true };
+            copy.Click += delegate
+            {
+                try { Clipboard.SetText(box.Text); copy.Text = "Скопировано"; }
+                catch { }
+            };
+            bottom.Controls.Add(close);
+            bottom.Controls.Add(copy);
+            form.Controls.Add(box);
+            form.Controls.Add(bottom);
+            form.Shown += delegate { box.SelectionLength = 0; form.TopMost = false; form.Activate(); };
+            form.Show();
         }
     }
 

@@ -7,7 +7,7 @@ if not exist "%CSC%" (
   echo .NET Framework 4.x compiler not found.
   exit /b 1
 )
-"%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu /codepage:65001 /win32icon:"%~dp0BatteryTray.ico" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /out:"%~dp0BatteryTray.exe" "%~dp0BatteryTray.cs"
+"%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu /codepage:65001 /win32icon:"%~dp0BatteryTray.ico" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /out:"%~dp0BatteryTray.exe" "%~dp0BatteryTray.cs" "%~dp0Razer.cs"
 if errorlevel 1 (
   echo Build failed.
   if not defined CI pause

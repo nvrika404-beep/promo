@@ -1,0 +1,30 @@
+name: BatteryTray
+
+on:
+  push:
+    paths:
+      - 'tools/battery-tray/**'
+      - '.github/workflows/battery-tray.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build BatteryTray.exe
+        shell: cmd
+        run: call tools\battery-tray\build.cmd
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BatteryTray
+          path: |
+            tools/battery-tray/BatteryTray.exe
+            tools/battery-tray/README.md
+          if-no-files-found: error
